@@ -1,0 +1,217 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  /* ─── Color Palette ─────────────────────────────── */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f7f7f8;
+  --bg-card: #ffffff;
+
+  --border: #e5e5e5;
+  --border-hover: #d0d0d0;
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b6b6b;
+  --text-muted: #999999;
+
+  --accent: #1a1a1a;
+  --accent-soft: rgba(26, 26, 26, 0.06);
+
+  --green: #16a34a;
+  --green-soft: rgba(22, 163, 74, 0.08);
+  --red: #dc2626;
+  --red-soft: rgba(220, 38, 38, 0.08);
+  --yellow: #ca8a04;
+  --yellow-soft: rgba(202, 138, 4, 0.08);
+
+  /* ─── Spacing ───────────────────────────────────── */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Scroll ──────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+
+/* ─── Card ────────────────────────────────────────── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.2s ease;
+}
+
+.card:hover {
+  border-color: var(--border-hover);
+}
+
+/* ─── Button ──────────────────────────────────────── */
+.btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  font-family: 'Inter', sans-serif;
+}
+
+.btn-primary:hover {
+  opacity: 0.85;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Status Badges ───────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-bullish {
+  background: var(--green-soft);
+  color: var(--green);
+  border: 1px solid rgba(22, 163, 74, 0.15);
+}
+
+.badge-bearish {
+  background: var(--red-soft);
+  color: var(--red);
+  border: 1px solid rgba(220, 38, 38, 0.15);
+}
+
+.badge-neutral {
+  background: var(--yellow-soft);
+  color: var(--yellow);
+  border: 1px solid rgba(202, 138, 4, 0.15);
+}
+
+/* ─── Sidebar ─────────────────────────────────────── */
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 72px;
+  height: 100vh;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+  z-index: 100;
+}
+
+.sidebar-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-bottom: 4px;
+}
+
+.sidebar-icon:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.sidebar-icon.active {
+  color: var(--text-primary);
+  background: var(--accent-soft);
+}
+
+.main-content {
+  margin-left: 72px;
+  padding: 32px;
+  min-height: 100vh;
+  max-width: 1200px;
+}
+
+/* ─── Grid Utilities ──────────────────────────────── */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Form Inputs ─────────────────────────────────── */
+input[type="text"],
+input[type="url"],
+select {
+  font-family: 'Inter', sans-serif;
+}
