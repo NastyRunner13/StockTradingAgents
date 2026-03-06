@@ -8,7 +8,10 @@ import {
     History,
     Settings,
     TrendingUp,
+    Moon,
+    Sun,
 } from 'lucide-react';
+import { useTheme } from './ThemeProvider';
 
 const navItems = [
     { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -19,6 +22,7 @@ const navItems = [
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const { theme, toggleTheme } = useTheme();
 
     return (
         <nav className="sidebar">
@@ -33,7 +37,7 @@ export default function Sidebar() {
                     alignItems: 'center',
                     justifyContent: 'center',
                 }}>
-                    <TrendingUp size={18} color="#fff" />
+                    <TrendingUp size={18} color={theme === 'dark' ? '#0a0a0b' : '#fff'} />
                 </div>
             </div>
 
@@ -46,8 +50,18 @@ export default function Sidebar() {
                 </Link>
             ))}
 
-            {/* Status */}
-            <div style={{ marginTop: 'auto', marginBottom: 16 }}>
+            {/* Bottom section */}
+            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                {/* Theme Toggle */}
+                <button
+                    onClick={toggleTheme}
+                    className="theme-toggle"
+                    title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                >
+                    {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
+
+                {/* Status */}
                 <div style={{
                     width: 8,
                     height: 8,
