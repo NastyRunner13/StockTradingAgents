@@ -21,6 +21,7 @@ from graph.pipeline import TradingPipeline
 from memory.trade_db import TradeDB
 from data.stock_provider import StockProvider
 from data.crypto_provider import CryptoProvider
+from data.ticker_search import search_tickers
 
 # ─── Logging Setup ────────────────────────────────────────────
 logging.basicConfig(
@@ -37,10 +38,10 @@ class AnalyzeRequest(BaseModel):
     ticker: str
     asset_type: str = "stock"  # "stock" or "crypto"
     trade_date: Optional[str] = None
+    selected_analysts: Optional[list[str]] = None  # e.g. ["market", "news"]
 
 class TradeApprovalRequest(BaseModel):
-    trade_id: int
-    approved: bool
+    approval: str = "approve"  # "approve" or "reject"
 
 class WatchlistRequest(BaseModel):
     tickers: list[str]
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI):
     await trade_db.initialize()
     
     pipeline = TradingPipeline()
+    await pipeline.initialize()
     
     yield
 
@@ -134,19 +136,35 @@ async def root():
     }
 
 
+@app.get("/search")
+async def search_ticker(
+    q: str = Query(default="", min_length=1, max_length=20),
+    asset_type: str = Query(default="all"),
+    limit: int = Query(default=8, le=20),
+):
+    """Search for tickers by keyword (auto-suggest)."""
+    results = search_tickers(q, asset_type=asset_type, limit=limit)
+    return results
+
+
 @app.post("/analyze")
 async def analyze_ticker(request: AnalyzeRequest):
     """Run the full agent pipeline for a ticker."""
     if not pipeline:
         raise HTTPException(status_code=503, detail="Pipeline not initialized")
 
+    # Unique session ID for this analysis (prevents cross-tab event mixing)
+    import uuid
+    analysis_id = str(uuid.uuid4())[:12]
+
     logger.info("━" * 60)
-    logger.info(f"🚀 ANALYSIS STARTED — {request.ticker} ({request.asset_type})")
+    logger.info(f"🚀 ANALYSIS STARTED — {request.ticker} ({request.asset_type}) [session: {analysis_id}]")
     logger.info("━" * 60)
 
     # Broadcast analysis start
     await broadcast({
         "type": "analysis_start",
+        "analysis_id": analysis_id,
         "data": {"ticker": request.ticker, "asset_type": request.asset_type},
     })
 
@@ -154,10 +172,26 @@ async def analyze_ticker(request: AnalyzeRequest):
         import time
         start_time = time.time()
 
+        # Log callback: broadcast each agent event via WebSocket (scoped to this analysis)
+        async def log_callback(agent: str, stage: str, message: str, details: str = ""):
+            await broadcast({
+                "type": "analysis_log",
+                "analysis_id": analysis_id,
+                "data": {
+                    "agent": agent,
+                    "stage": stage,
+                    "message": message,
+                    "details": details[:500] if details else "",
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+            })
+
         result = await pipeline.analyze(
             ticker=request.ticker,
             asset_type=request.asset_type,
             trade_date=request.trade_date or datetime.utcnow().strftime("%Y-%m-%d"),
+            log_callback=log_callback,
+            selected_analysts=request.selected_analysts,
         )
 
         elapsed = time.time() - start_time
@@ -277,6 +311,113 @@ async def get_indicators(ticker: str, asset_type: str = "stock"):
         return stock_provider.get_technical_indicators(ticker)
 
 
+# ─── Phase 3: Chart Data + Analysis History ────────────────────
+
+@app.get("/price/{ticker}/chart")
+async def get_price_chart(ticker: str, asset_type: str = "stock"):
+    """Get OHLCV data formatted for lightweight-charts candlestick."""
+    try:
+        if asset_type == "crypto":
+            df = crypto_provider.get_price_data(ticker)
+        else:
+            df = stock_provider.get_price_data(ticker)
+
+        if df.empty:
+            return []
+
+        records = []
+        for date, row in df.iterrows():
+            records.append({
+                "time": date.strftime("%Y-%m-%d"),
+                "open": round(float(row["Open"]), 2),
+                "high": round(float(row["High"]), 2),
+                "low": round(float(row["Low"]), 2),
+                "close": round(float(row["Close"]), 2),
+                "volume": int(row.get("Volume", 0)) if "Volume" in row else None,
+            })
+        return records
+    except Exception as e:
+        logger.error(f"Chart data error for {ticker}: {e}")
+        return []
+
+
+@app.get("/analysis/history")
+async def get_analysis_history(
+    ticker: Optional[str] = None,
+    limit: int = Query(default=20, le=100),
+):
+    """Get past analysis summaries for the history timeline."""
+    if not trade_db:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    try:
+        logs = await trade_db.get_analysis_logs(ticker=ticker, limit=limit)
+        return logs
+    except Exception as e:
+        logger.error(f"Analysis history error: {e}")
+        return []
+
+@app.post("/trades/{thread_id}/approve")
+async def approve_trade(thread_id: str, request: TradeApprovalRequest):
+    """Approve or reject a paused trade (HITL).
+    
+    When a trade has lower confidence than AUTO_TRADE_CONFIDENCE,
+    the pipeline pauses and waits for human approval.
+    Call this endpoint with the thread_id to resume.
+    """
+    if not pipeline:
+        raise HTTPException(status_code=503, detail="Pipeline not initialized")
+
+    # Check the current state
+    state = await pipeline.get_state(thread_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail=f"No analysis found for thread {thread_id}")
+
+    if state.get("status") != "interrupted":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Analysis is not waiting for approval (status: {state.get('status')})"
+        )
+
+    logger.info(f"{'✅' if request.approval == 'approve' else '❌'} Trade approval for {thread_id}: {request.approval}")
+
+    try:
+        from langgraph.types import Command
+        config = {"configurable": {"thread_id": thread_id}}
+        result = await pipeline.graph.ainvoke(
+            Command(resume=request.approval),
+            config=config,
+        )
+        serialized = _serialize_state(result)
+
+        await broadcast({
+            "type": "trade_approved" if request.approval == "approve" else "trade_rejected",
+            "data": {"thread_id": thread_id, **serialized},
+        })
+
+        return {"status": "ok", "thread_id": thread_id, "decision": request.approval, **serialized}
+
+    except Exception as e:
+        logger.error(f"Error resuming thread {thread_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to resume: {str(e)}")
+
+
+@app.get("/analysis/{thread_id}/state")
+async def get_analysis_state(thread_id: str):
+    """Get the current state of an analysis pipeline.
+    
+    Useful for checking if a trade is waiting for approval,
+    or inspecting the full state of a completed analysis.
+    """
+    if not pipeline:
+        raise HTTPException(status_code=503, detail="Pipeline not initialized")
+
+    state = await pipeline.get_state(thread_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail=f"No analysis found for thread {thread_id}")
+
+    return _serialize_state(state)
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
@@ -285,29 +426,34 @@ async def health_check():
 # ─── Helpers ──────────────────────────────────────────────────
 
 def _serialize_state(state: dict) -> dict:
-    """Serialize pipeline state for JSON response, handling NaN/Inf floats."""
+    """Serialize pipeline state for JSON response, handling Pydantic, enums, NaN/Inf."""
+    import enum
+
     def _sanitize(obj):
+        if obj is None:
+            return None
         if isinstance(obj, float):
             if math.isnan(obj) or math.isinf(obj):
                 return None
             return obj
-        elif isinstance(obj, dict):
+        if isinstance(obj, bool):
+            return obj
+        if isinstance(obj, int):
+            return obj
+        if isinstance(obj, str):
+            return obj
+        if isinstance(obj, enum.Enum):
+            return obj.value
+        if hasattr(obj, "model_dump"):
+            return _sanitize(obj.model_dump())
+        if isinstance(obj, dict):
             return {k: _sanitize(v) for k, v in obj.items()}
-        elif isinstance(obj, (list, tuple)):
+        if isinstance(obj, (list, tuple)):
             return [_sanitize(v) for v in obj]
-        return obj
+        # Last resort — stringify
+        return str(obj)
 
-    result = {}
-    for key, value in state.items():
-        if value is None:
-            result[key] = None
-        elif hasattr(value, "model_dump"):
-            result[key] = _sanitize(value.model_dump())
-        elif isinstance(value, dict):
-            result[key] = _sanitize(value)
-        else:
-            result[key] = str(value)
-    return result
+    return {k: _sanitize(v) for k, v in state.items()}
 
 
 # ─── Main ─────────────────────────────────────────────────────

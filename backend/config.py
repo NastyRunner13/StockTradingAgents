@@ -23,8 +23,10 @@ for d in [DATA_DIR, DB_DIR, CHROMA_DIR]:
 
 # ─── Groq LLM ─────────────────────────────────────────────────
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-DEEP_THINK_MODEL = "moonshotai/kimi-k2-instruct-0905"   # Complex reasoning
-QUICK_THINK_MODEL = "moonshotai/kimi-k2-instruct-0905"   # Fast tasks (llama3-70b-8192 was retired)
+# DEEP_THINK_MODEL = "moonshotai/kimi-k2-instruct-0905"   # Complex reasoning
+# QUICK_THINK_MODEL = "moonshotai/kimi-k2-instruct-0905"   # Fast tasks (llama3-70b-8192 was retired)
+DEEP_THINK_MODEL = "openai/gpt-oss-120b"   # Complex reasoning
+QUICK_THINK_MODEL = "openai/gpt-oss-20b"   # Fast tasks (llama3-70b-8192 was retired)
 LLM_TEMPERATURE = 0.7
 LLM_MAX_RETRIES = 3
 
@@ -35,10 +37,18 @@ ANALYST_TIMEOUT = 60           # Seconds per analyst
 AUTO_TRADE_CONFIDENCE = 0.85   # Auto-execute above this confidence
 APPROVAL_QUEUE_TTL = 300       # Seconds before pending approval expires
 
-# ─── Alpaca Broker ─────────────────────────────────────────────
-ALPACA_API_KEY = os.getenv("ALPACA_API_KEY", "")
-ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY", "")
-ALPACA_BASE_URL = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
+# ─── LangGraph Advanced ──────────────────────────────────────
+CHECKPOINT_DB_PATH = DB_DIR / "checkpoints.db"
+ENABLE_HITL = True             # Human-in-the-loop trade approval
+DEFAULT_ANALYSTS = ["market", "sentiment", "news", "fundamentals"]
+
+# ─── Alpha Vantage (Stock Data) ────────────────────────────────
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
+
+# ─── Finnhub (News & Sentiment) ───────────────────────────────
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
+NEWS_MAX_ARTICLES = 25             # Combined max from all sources
+NEWS_LOOKBACK_DAYS = 7             # How far back to fetch news
 
 # ─── Alerts ────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
