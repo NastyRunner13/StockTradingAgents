@@ -42,10 +42,20 @@ def create_market_analyst(llm):
     stock_provider = StockProvider()
     crypto_provider = CryptoProvider()
 
-    async def market_analyst_node(state: dict) -> dict:
+    async def market_analyst_node(state: dict, config: dict = None) -> dict:
         ticker = state["ticker"]
         asset_type = state.get("asset_type", "stock")
+        log_callback = (config or {}).get("configurable", {}).get("_log_callback")
         logger.info(f"📊 Market Analyst started for {ticker} ({asset_type})")
+
+        async def _log(stage: str, message: str, details: str = ""):
+            logger.info(f"📊 [Market] {stage}: {message}")
+            if details:
+                logger.info(f"   ↳ {details[:300]}")
+            if log_callback:
+                await log_callback("Market Analyst", stage, message, details)
+
+        await _log("started", f"Fetching technical data for {ticker}")
 
         # Fetch technical data
         if asset_type == "crypto":
@@ -56,6 +66,10 @@ def create_market_analyst(llm):
             indicators = stock_provider.get_technical_indicators(ticker)
             price_data = stock_provider.get_price_data(ticker, period="3mo")
             price_summary = f"3-month data available. Latest close: {indicators.get('current_price', 'N/A')}"
+
+        # Log fetched data highlights
+        data_highlights = f"RSI: {indicators.get('rsi_14', 'N/A')}, Price: ${indicators.get('current_price', 'N/A')}, 1d Δ: {indicators.get('price_change_1d', indicators.get('price_change_24h', 'N/A'))}%"
+        await _log("data_fetched", data_highlights, json.dumps(indicators, default=str)[:500])
 
         import uuid
         run_id = str(uuid.uuid4())[:8]
@@ -80,7 +94,9 @@ Provide your technical analysis in the required JSON format.
             HumanMessage(content=data_prompt),
         ]
 
+        await _log("llm_call", "Sending prompt to LLM for technical analysis")
         response = await llm.ainvoke(messages)
+        await _log("llm_response", f"Received LLM response ({len(response.content)} chars)", response.content[:300])
 
         result = safe_parse_json(response.content)
         if "raw_response" in result:
@@ -104,7 +120,7 @@ Provide your technical analysis in the required JSON format.
             reasoning=result.get("reasoning", ""),
         )
 
-        logger.info(f"📊 Market Analyst done — {report.sentiment.value} (conf: {report.confidence:.0%})")
+        await _log("completed", f"Verdict: {report.sentiment.value} ({report.confidence:.0%} confidence)", report.summary)
         return {"market_report": report}
 
     return market_analyst_node

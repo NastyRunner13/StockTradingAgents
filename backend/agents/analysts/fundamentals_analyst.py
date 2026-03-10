@@ -45,17 +45,27 @@ def create_fundamentals_analyst(llm):
     """Factory function that returns the fundamentals analyst node function."""
     stock_provider = StockProvider()
 
-    async def fundamentals_analyst_node(state: dict) -> dict:
+    async def fundamentals_analyst_node(state: dict, config: dict = None) -> dict:
         ticker = state["ticker"]
         asset_type = state.get("asset_type", "stock")
+        log_callback = (config or {}).get("configurable", {}).get("_log_callback")
         logger.info(f"📑 Fundamentals Analyst started for {ticker} ({asset_type})")
+
+        async def _log(stage: str, message: str, details: str = ""):
+            logger.info(f"📑 [Fundamentals] {stage}: {message}")
+            if details:
+                logger.info(f"   ↳ {details[:300]}")
+            if log_callback:
+                await log_callback("Fundamentals Analyst", stage, message, details)
+
+        await _log("started", f"Fetching financial data for {ticker}")
 
         import uuid
         run_id = str(uuid.uuid4())[:8]
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         if asset_type == "crypto":
-            # For crypto, we provide what data we have
+            await _log("data_fetched", "Crypto asset — no traditional financials", "Using market position and adoption analysis")
             data_prompt = f"""
 Analysis Run: {run_id} | Timestamp: {now}
 
@@ -69,6 +79,16 @@ Provide your analysis in the required JSON format.
             balance_sheet = stock_provider.get_balance_sheet(ticker)
             cashflow = stock_provider.get_cashflow(ticker)
             income_stmt = stock_provider.get_income_statement(ticker)
+
+            # Log key metrics
+            pe = fundamentals.get("pe_ratio", "N/A")
+            mcap = fundamentals.get("market_cap", "N/A")
+            if isinstance(mcap, (int, float)) and mcap:
+                mcap = f"${mcap/1e9:.1f}B" if mcap > 1e9 else f"${mcap/1e6:.0f}M"
+            roe = fundamentals.get("roe", "N/A")
+            if isinstance(roe, float):
+                roe = f"{roe*100:.1f}%"
+            await _log("data_fetched", f"P/E: {pe}, Mkt Cap: {mcap}, ROE: {roe}", json.dumps(fundamentals, default=str)[:500])
 
             data_prompt = f"""
 Analysis Run: {run_id} | Timestamp: {now}
@@ -96,7 +116,9 @@ Provide your analysis in the required JSON format.
             HumanMessage(content=data_prompt),
         ]
 
+        await _log("llm_call", "Sending prompt to LLM for fundamentals analysis")
         response = await llm.ainvoke(messages)
+        await _log("llm_response", f"Received LLM response ({len(response.content)} chars)", response.content[:300])
 
         result = safe_parse_json(response.content)
         if "raw_response" in result:
@@ -111,7 +133,7 @@ Provide your analysis in the required JSON format.
 
         raw_data = {}
         if asset_type != "crypto":
-            raw_data = stock_provider.get_fundamentals(ticker)
+            raw_data = fundamentals
 
         report = AnalystReport(
             analyst_type="fundamentals",
@@ -124,7 +146,7 @@ Provide your analysis in the required JSON format.
             reasoning=result.get("reasoning", ""),
         )
 
-        logger.info(f"📑 Fundamentals Analyst done — {report.sentiment.value} (conf: {report.confidence:.0%})")
+        await _log("completed", f"Verdict: {report.sentiment.value} ({report.confidence:.0%} confidence)", report.summary)
         return {"fundamentals_report": report}
 
     return fundamentals_analyst_node

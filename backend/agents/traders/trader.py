@@ -21,8 +21,11 @@ Your trade plan must include:
 - CONFIDENCE: 0.0 to 1.0 (how confident you are in this trade)
 - ENTRY STRATEGY: target entry price
 - EXIT STRATEGY: target price (profit target) and stop-loss
-- POSITION SIZE: suggested portfolio allocation (0.0 to 0.3 = max 30%)
+- POSITION SIZE: suggested portfolio allocation (scale with conviction: 2-5% low, 5-15% medium, 15-30% high)
 - REASONING: why this specific trade setup makes sense
+
+IMPORTANT: Position size should vary based on your confidence and the risk/reward ratio.
+Do NOT default to a fixed size. Think about what % of portfolio this specific trade deserves.
 
 Respond ONLY in valid JSON:
 {
@@ -31,7 +34,7 @@ Respond ONLY in valid JSON:
     "entry_price": 150.00,
     "target_price": 170.00,
     "stop_loss": 140.00,
-    "position_size_pct": 0.10,
+    "position_size_pct": <choose 0.02 to 0.30 based on conviction>,
     "reasoning": "..."
 }
 """

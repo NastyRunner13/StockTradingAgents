@@ -19,8 +19,8 @@ reward-to-risk ratios. Argue for a more aggressive approach.
 Respond in valid JSON:
 {
     "argument": "Your risk assessment and recommendation (1-2 paragraphs)",
-    "recommended_position_pct": 0.15,
-    "recommended_stop_loss_pct": 0.03,
+    "recommended_position_pct": <0.10 to 0.25 based on opportunity>,
+    "recommended_stop_loss_pct": <tight stop based on volatility>,
     "risk_rating": "acceptable"
 }
 """
@@ -32,8 +32,8 @@ exposure. Argue for a more cautious approach.
 Respond in valid JSON:
 {
     "argument": "Your risk assessment and recommendation (1-2 paragraphs)",
-    "recommended_position_pct": 0.05,
-    "recommended_stop_loss_pct": 0.08,
+    "recommended_position_pct": <0.02 to 0.08 based on risk level>,
+    "recommended_stop_loss_pct": <wider stop for safety>,
     "risk_rating": "high_risk"
 }
 """
@@ -44,8 +44,8 @@ You consider both the aggressive and conservative viewpoints and aim for optimal
 Respond in valid JSON:
 {
     "argument": "Your balanced risk assessment (1-2 paragraphs)",
-    "recommended_position_pct": 0.10,
-    "recommended_stop_loss_pct": 0.05,
+    "recommended_position_pct": <0.05 to 0.15 based on balanced assessment>,
+    "recommended_stop_loss_pct": <moderate stop level>,
     "risk_rating": "moderate"
 }
 """
@@ -55,17 +55,20 @@ aggressive, conservative, and neutral risk analysts about a proposed trade.
 
 Deliver your final risk assessment:
 1. Approve or reject the trade
-2. Set the final position size
+2. Set the final position size (choose based on conviction: 2-5% for low conviction, 5-12% for medium, 12-25% for high conviction)
 3. Set risk parameters (stop-loss, max loss per trade)
+
+IMPORTANT: Do NOT default to a fixed position size. Scale it based on the trade's confidence,
+risk/reward ratio, and the quality of arguments from the debate. Be specific and data-driven.
 
 Respond in valid JSON:
 {
     "approved": true,
     "verdict": "Approved with modifications",
-    "final_position_pct": 0.08,
-    "final_stop_loss_pct": 0.05,
-    "max_portfolio_risk_pct": 0.02,
-    "reasoning": "Detailed explanation of the risk decision"
+    "final_position_pct": <choose 0.02 to 0.25 based on conviction>,
+    "final_stop_loss_pct": <choose based on volatility>,
+    "max_portfolio_risk_pct": <choose 0.01 to 0.05>,
+    "reasoning": "Detailed explanation of the risk decision including why you chose this specific position size"
 }
 """
 
