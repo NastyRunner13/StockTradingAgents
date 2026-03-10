@@ -10,6 +10,7 @@ from datetime import datetime
 import json
 import logging
 from utils.json_parser import safe_parse_json
+from utils.event_bus import event_bus
 
 logger = logging.getLogger("nexustrade.fundamentals")
 
@@ -48,7 +49,16 @@ def create_fundamentals_analyst(llm):
     async def fundamentals_analyst_node(state: dict) -> dict:
         ticker = state["ticker"]
         asset_type = state.get("asset_type", "stock")
+        analysis_id = state.get("analysis_id")
         logger.info(f"📑 Fundamentals Analyst started for {ticker} ({asset_type})")
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "Fundamentals Analyst",
+                "stage": "started",
+                "message": f"Analyzing financials for {ticker}",
+                "details": "",
+                "timestamp": datetime.utcnow().isoformat()
+            })
 
         import uuid
         run_id = str(uuid.uuid4())[:8]
@@ -96,6 +106,15 @@ Provide your analysis in the required JSON format.
             HumanMessage(content=data_prompt),
         ]
 
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "Fundamentals Analyst",
+                "stage": "llm_call",
+                "message": "Generating fundamental insights",
+                "details": "",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+
         response = await llm.ainvoke(messages)
 
         result = safe_parse_json(response.content)
@@ -125,6 +144,14 @@ Provide your analysis in the required JSON format.
         )
 
         logger.info(f"📑 Fundamentals Analyst done — {report.sentiment.value} (conf: {report.confidence:.0%})")
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "Fundamentals Analyst",
+                "stage": "completed",
+                "message": f"Done — Sentiment: {report.sentiment.value}",
+                "details": result.get("reasoning", ""),
+                "timestamp": datetime.utcnow().isoformat()
+            })
         return {"fundamentals_report": report}
 
     return fundamentals_analyst_node

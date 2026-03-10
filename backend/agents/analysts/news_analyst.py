@@ -10,6 +10,7 @@ from datetime import datetime
 import json
 import logging
 from utils.json_parser import safe_parse_json
+from utils.event_bus import event_bus
 
 logger = logging.getLogger("nexustrade.news")
 
@@ -41,7 +42,16 @@ def create_news_analyst(llm):
 
     async def news_analyst_node(state: dict) -> dict:
         ticker = state["ticker"]
+        analysis_id = state.get("analysis_id")
         logger.info(f"📰 News Analyst started for {ticker}")
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "News Analyst",
+                "stage": "started",
+                "message": f"Hunting latest news for {ticker}",
+                "details": "",
+                "timestamp": datetime.utcnow().isoformat()
+            })
 
         # Fetch news and insider data
         news = stock_provider.get_news(ticker)
@@ -80,6 +90,15 @@ Provide your analysis in the required JSON format.
             HumanMessage(content=data_prompt),
         ]
 
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "News Analyst",
+                "stage": "llm_call",
+                "message": "Generating news insights",
+                "details": "",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+
         response = await llm.ainvoke(messages)
 
         result = safe_parse_json(response.content)
@@ -105,6 +124,14 @@ Provide your analysis in the required JSON format.
         )
 
         logger.info(f"📰 News Analyst done — {report.sentiment.value} (conf: {report.confidence:.0%})")
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "News Analyst",
+                "stage": "completed",
+                "message": f"Done — Sentiment: {report.sentiment.value}",
+                "details": result.get("reasoning", ""),
+                "timestamp": datetime.utcnow().isoformat()
+            })
         return {"news_report": report}
 
     return news_analyst_node
