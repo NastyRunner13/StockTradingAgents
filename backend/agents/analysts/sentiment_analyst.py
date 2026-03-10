@@ -10,6 +10,7 @@ from datetime import datetime
 import json
 import logging
 from utils.json_parser import safe_parse_json
+from utils.event_bus import event_bus
 
 logger = logging.getLogger("nexustrade.sentiment")
 
@@ -39,7 +40,17 @@ def create_sentiment_analyst(llm):
 
     async def sentiment_analyst_node(state: dict) -> dict:
         ticker = state["ticker"]
+        analysis_id = state.get("analysis_id")
         logger.info(f"💭 Sentiment Analyst started for {ticker}")
+        
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "Sentiment Analyst",
+                "stage": "started",
+                "message": f"Analyzing sentiment for {ticker}",
+                "details": "",
+                "timestamp": datetime.utcnow().isoformat()
+            })
 
         # Fetch news as proxy for sentiment
         news = stock_provider.get_news(ticker)
@@ -72,6 +83,15 @@ Consider: Is sentiment too euphoric (contrarian sell signal)? Too fearful (contr
             HumanMessage(content=data_prompt),
         ]
 
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "Sentiment Analyst",
+                "stage": "llm_call",
+                "message": "Generating sentiment insights",
+                "details": "",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+
         response = await llm.ainvoke(messages)
 
         result = safe_parse_json(response.content)
@@ -97,6 +117,14 @@ Consider: Is sentiment too euphoric (contrarian sell signal)? Too fearful (contr
         )
 
         logger.info(f"💭 Sentiment Analyst done — {report.sentiment.value} (conf: {report.confidence:.0%})")
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "Sentiment Analyst",
+                "stage": "completed",
+                "message": f"Done — Sentiment: {report.sentiment.value}",
+                "details": result.get("reasoning", ""),
+                "timestamp": datetime.utcnow().isoformat()
+            })
         return {"sentiment_report": report}
 
     return sentiment_analyst_node

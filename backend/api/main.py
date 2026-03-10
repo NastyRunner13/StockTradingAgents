@@ -22,6 +22,8 @@ from memory.trade_db import TradeDB
 from data.stock_provider import StockProvider
 from data.crypto_provider import CryptoProvider
 from data.ticker_search import search_tickers
+from utils.event_bus import event_bus
+import uuid
 
 # ─── Logging Setup ────────────────────────────────────────────
 logging.basicConfig(
@@ -58,6 +60,9 @@ active_connections: list[WebSocket] = []
 
 # ─── Lifespan ─────────────────────────────────────────────────
 
+async def broadcast_subscriber(message: dict):
+    await broadcast(message)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize resources on startup."""
@@ -68,9 +73,10 @@ async def lifespan(app: FastAPI):
     
     pipeline = TradingPipeline()
     await pipeline.initialize()
+    event_bus.subscribe(broadcast_subscriber)
     
     yield
-
+    event_bus.unsubscribe(broadcast_subscriber)
 
 # ─── App ──────────────────────────────────────────────────────
 
@@ -162,6 +168,7 @@ async def analyze_ticker(request: AnalyzeRequest):
     logger.info("━" * 60)
 
     # Broadcast analysis start
+    analysis_id = str(uuid.uuid4())
     await broadcast({
         "type": "analysis_start",
         "analysis_id": analysis_id,
@@ -192,6 +199,7 @@ async def analyze_ticker(request: AnalyzeRequest):
             trade_date=request.trade_date or datetime.utcnow().strftime("%Y-%m-%d"),
             log_callback=log_callback,
             selected_analysts=request.selected_analysts,
+            analysis_id=analysis_id,
         )
 
         elapsed = time.time() - start_time

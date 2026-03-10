@@ -11,6 +11,7 @@ from datetime import datetime
 import json
 import logging
 from utils.json_parser import safe_parse_json
+from utils.event_bus import event_bus
 
 logger = logging.getLogger("nexustrade.market")
 
@@ -45,7 +46,17 @@ def create_market_analyst(llm):
     async def market_analyst_node(state: dict) -> dict:
         ticker = state["ticker"]
         asset_type = state.get("asset_type", "stock")
+        analysis_id = state.get("analysis_id")
+        
         logger.info(f"📊 Market Analyst started for {ticker} ({asset_type})")
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "Market Analyst",
+                "stage": "started",
+                "message": f"Analyzing technicals for {ticker}",
+                "details": "",
+                "timestamp": datetime.utcnow().isoformat()
+            })
 
         # Fetch technical data
         if asset_type == "crypto":
@@ -80,6 +91,15 @@ Provide your technical analysis in the required JSON format.
             HumanMessage(content=data_prompt),
         ]
 
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "Market Analyst",
+                "stage": "llm_call",
+                "message": "Generating technical insights",
+                "details": "",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+
         response = await llm.ainvoke(messages)
 
         result = safe_parse_json(response.content)
@@ -105,6 +125,14 @@ Provide your technical analysis in the required JSON format.
         )
 
         logger.info(f"📊 Market Analyst done — {report.sentiment.value} (conf: {report.confidence:.0%})")
+        if analysis_id:
+            await event_bus.emit("analysis_log", analysis_id, {
+                "agent": "Market Analyst",
+                "stage": "completed",
+                "message": f"Done — Sentiment: {report.sentiment.value}",
+                "details": result.get("reasoning", ""),
+                "timestamp": datetime.utcnow().isoformat()
+            })
         return {"market_report": report}
 
     return market_analyst_node

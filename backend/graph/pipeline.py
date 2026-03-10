@@ -57,6 +57,8 @@ class TradingPipelineState(TypedDict):
     news_report: Optional[Any]
     fundamentals_report: Optional[Any]
 
+    analysis_id: Optional[str]
+    
     # Debate states
     investment_debate: Optional[Any]
     risk_debate: Optional[Any]
@@ -299,6 +301,7 @@ class TradingPipeline:
         log_callback=None,
         selected_analysts: list[str] | None = None,
         thread_id: str | None = None,
+        analysis_id: str = "",
     ) -> dict:
         """Run the full pipeline for a ticker.
 
@@ -338,6 +341,7 @@ class TradingPipeline:
             "final_decision": None,
             "trade_approved": False,
             "agent_weights": {},
+            "analysis_id": analysis_id,
         }
 
         config = {
